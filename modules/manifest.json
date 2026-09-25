@@ -1,0 +1,21 @@
+{
+  "loader": "NeoVirus",
+  "version": "1.2.0",
+  "modules": [
+    {
+      "id": "neovirus-environment",
+      "url": "./environment.js",
+      "version": "1.0.0"
+    },
+    {
+      "id": "neovirus-runtime",
+      "url": "./runtime.js",
+      "version": "1.0.0"
+    },
+    {
+      "id": "neovirus-verifier",
+      "url": "./verifier.js",
+      "version": "1.0.0"
+    }
+  ]
+}
