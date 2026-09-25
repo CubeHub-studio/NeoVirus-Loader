@@ -74,6 +74,122 @@
             return this.modules.delete(String(name || "").trim());
         }
 
+        async loadModuleURL(url, expectedName) {
+            url = String(url || "").trim();
+            if (!url) throw new Error("Module URL cannot be empty.");
+
+            const fetcher = typeof root.fetch === "function"
+                ? root.fetch.bind(root)
+                : null;
+
+            if (!fetcher) {
+                throw new Error("NeoVirus requires fetch() to load remote modules.");
+            }
+
+            const response = await fetcher(url);
+            if (!response || !response.ok) {
+                throw new Error(
+                    "Module download failed: HTTP " +
+                    (response ? response.status : "request failed")
+                );
+            }
+
+            const source = await response.text();
+
+            if (!source.trim()) {
+                throw new Error("Module " + url + " returned empty source.");
+            }
+
+            const before = new Set(this.modules.keys());
+
+            const runModule = new Function(
+                source + "\n//# sourceURL=" + url
+            );
+            runModule();
+
+            const requestedName = String(expectedName || "").trim();
+
+            if (requestedName && !this.modules.has(requestedName)) {
+                throw new Error(
+                    "Module " + requestedName +
+                    " did not register itself after loading."
+                );
+            }
+
+            const added = Array.from(this.modules.keys())
+                .filter(name => !before.has(name));
+
+            if (!requestedName && added.length === 0) {
+                throw new Error(
+                    "Module did not register itself after loading: " + url
+                );
+            }
+
+            return requestedName || added[0];
+        }
+
+        async discoverModules(manifest) {
+            if (!Array.isArray(manifest)) {
+                throw new Error("NeoVirus module manifest must be an array.");
+            }
+
+            const discovered = [];
+
+            for (const entry of manifest) {
+                if (!entry || !entry.url) {
+                    throw new Error("Every module manifest entry requires a url.");
+                }
+
+                const id = await this.loadModuleURL(entry.url, entry.id);
+
+                const module = this.getModule(id);
+
+                if (entry.version && module) {
+                    module.version = String(entry.version);
+                }
+
+                if (Array.isArray(entry.dependencies) && module) {
+                    module.dependencies = entry.dependencies
+                        .map(dep => String(dep).trim())
+                        .filter(Boolean);
+                }
+
+                if (Array.isArray(entry.optionalDependencies) && module) {
+                    module.optionalDependencies = entry.optionalDependencies
+                        .map(dep => String(dep).trim())
+                        .filter(Boolean);
+                }
+
+                discovered.push(id);
+                this._emit("moduleDiscovered", {
+                    id,
+                    url: String(entry.url)
+                });
+            }
+
+            return discovered;
+        }
+
+        unloadModule(name) {
+            name = String(name || "").trim();
+            const module = this.modules.get(name);
+
+            if (!module) return false;
+
+            if (module.state === "running" && module.dispose && this.runtime) {
+                const result = module.dispose(this.runtime);
+                if (result && typeof result.then === "function") {
+                    throw new Error(
+                        "unloadModule() cannot unload an asynchronous module while running. Use unload()."
+                    );
+                }
+            }
+
+            this.initializedModules = this.initializedModules.filter(id => id !== name);
+
+            return this.modules.delete(name);
+        }
+
         hasModule(name) {
             return this.modules.has(String(name || "").trim());
         }
