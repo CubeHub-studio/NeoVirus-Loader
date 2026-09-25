@@ -263,6 +263,16 @@
             return order;
         }
 
+        async _yield() {
+            await new Promise(resolve => {
+                if (typeof root.requestAnimationFrame === "function") {
+                    root.requestAnimationFrame(() => resolve());
+                } else {
+                    setTimeout(resolve, 0);
+                }
+            });
+        }
+
         _validateEnvironment(options) {
             if (typeof Promise === "undefined") {
                 throw new Error("NeoVirus requires Promise support.");
@@ -331,6 +341,7 @@
                 this._validateEnvironment(options);
 
                 this._setState("booting", "discovering", "Discovering modules", 15);
+                await this._yield();
 
                 const order = this._resolveOrder();
 
@@ -344,6 +355,7 @@
                 this._emit("modulesResolved", {
                     order: order.slice()
                 });
+                await this._yield();
 
                 const total = order.length || 1;
 
@@ -369,6 +381,7 @@
                         index,
                         total
                     });
+                    await this._yield();
 
                     try {
                         const result = await module.init(this.runtime);
@@ -388,6 +401,7 @@
                             index: index + 1,
                             total
                         });
+                        await this._yield();
                     } catch (error) {
                         module.state = "error";
                         module.error = this._errorMessage(error);
